@@ -1,0 +1,10 @@
+{
+  "id": "mermaid-plugin",
+  "name": "Mermaid-plugin",
+  "version": "1.0.0",
+  "description": "A SvelteKit plugin with canvas drawing using Mermaid",
+  "fileType": "mermaid-plugin",
+  "route": "/mermaid-plugin",
+  "entry": "/build/index.html",
+  "icon": "build/favicon.svg"
+}
