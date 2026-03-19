@@ -21,7 +21,8 @@
   import type { EditorMode, Tab } from '$/types';
   import { shouldShowEditorChooser } from '$/util/migration/domainMigration';
   import { PanZoomState } from '$/util/panZoom';
-  import { stateStore, updateCodeStore, urlsStore } from '$/util/state';
+  import { inputStateStore, stateStore, updateCodeStore, urlsStore } from '$/util/state';
+import { get } from 'svelte/store';
   import { logEvent, logMermaidChartClick } from '$/util/stats';
   import { initHandler } from '$/util/util';
   import { onMount } from 'svelte';
@@ -53,19 +54,85 @@
   let isMobile = $derived(width < 640);
   let isViewMode = $state(true);
   let showEditorChooser = $state(false);
+  let fileId = $state<string | null>(null);
+  let isHistoryOpen = $state(false);
+  let diagName = $state('Untitled Diagram');
+  let lastEdited = $state(Date.now());
+  let isSaving = false;
 
   onMount(async () => {
     showEditorChooser = shouldShowEditorChooser();
-    await initHandler();
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    fileId = urlParams.get('fileId');
+
+    if (fileId && (window as any).pluginAPI) {
+      try {
+        const pluginAPI = (window as any).pluginAPI;
+        const fileDetails = await pluginAPI.getFileDetailsById(fileId);
+        if (fileDetails) {
+          diagName = fileDetails.title || 'Untitled Diagram';
+          lastEdited = fileDetails.lastEdited || Date.now();
+        }
+
+        const documents = await pluginAPI.getDocumentsByParentFile(fileId);
+        if (documents && documents.length > 0) {
+          const content = documents[0];
+          const rawData = content.blocks?.[0]?.data;
+          if (rawData) {
+            if (rawData.code) {
+              inputStateStore.set(rawData);
+            } else if (typeof rawData === 'string') {
+              updateCodeStore({ code: rawData });
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load document from DB:', err);
+      }
+    } else {
+      await initHandler();
+    }
+
     window.addEventListener('appinstalled', () => {
       logEvent('pwaInstalled', { isMobile });
     });
   });
 
-  let isHistoryOpen = $state(false);
+  $effect(() => {
+    if (!fileId || !(window as any).pluginAPI) return;
 
-  let diagName = $state('Untitled Diagram');
-  let lastEdited = $state(Date.now());
+    const autoSaveToDatabase = async () => {
+      const pluginAPI = (window as any).pluginAPI;
+      if (isSaving) return;
+      isSaving = true;
+
+      try {
+        const state = get(inputStateStore);
+        if (!state.code) return;
+
+        const documents = await pluginAPI.getDocumentsByParentFile(fileId);
+        const existingDoc = documents && documents.length > 0 ? documents[0] : null;
+
+        const updatedContents = {
+          version: "2.28.2",
+          time: Date.now(),
+          blocks: [{ type: "mermaid", data: state }],
+          parent_file: fileId,
+          _id: existingDoc?._id
+        };
+
+        await pluginAPI.updateDocument(fileId, [updatedContents]);
+      } catch (error) {
+        console.error("Auto-save error:", error);
+      } finally {
+        isSaving = false;
+      }
+    };
+
+    const intervalId = setInterval(autoSaveToDatabase, 5000);
+    return () => clearInterval(intervalId);
+  });
 
   let editorPane: Resizable.Pane | undefined;
   $effect(() => {
@@ -89,12 +156,20 @@
   {/snippet}
 
   <TopBar 
-    fileId="local-diag"
+    fileId={fileId || "local-diag"}
     fileName={diagName}
     lastEdited={lastEdited}
-    onRename={(newName) => {
+    onRename={async (newName) => {
       diagName = newName;
       lastEdited = Date.now();
+      const pluginAPI = (window as any).pluginAPI;
+      if (fileId && pluginAPI) {
+        try {
+          await pluginAPI.updateFileName(fileId, newName);
+        } catch (e) {
+          console.error("Failed to rename on DB:", e);
+        }
+      }
     }}
   />
 

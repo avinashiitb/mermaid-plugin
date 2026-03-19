@@ -56,79 +56,17 @@
   {#if open}
     <div class="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg border border-gray-100 z-50">
       <div class="py-1">
-        <div class="px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-          Canvas Options
-        </div>
-        <button
-          class="menu-item"
-          onclick={() => { onLoad(); open = false; }}
-        >
-          <FolderOpenIcon class="text-blue-500" />
-          <span>Open</span>
-        </button>
-        <button
-          class="menu-item"
-          onclick={() => { onSave(); open = false; }}
-        >
-          <SaveIcon class="text-green-600" />
-          <span>Save</span>
-        </button>
-
-        <!-- Share Button -->
-        {#if onShare}
-          <button
-            class="menu-item"
-            onclick={() => { onShare(); open = false; }}
-          >
-            <ShareIcon class="text-indigo-500" />
-            <span>Share</span>
-          </button>
-        {/if}
-
-        <hr class="my-1 border-gray-100" />
-
-        <div class="px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+        <div class="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-gray-400">
           Export Options
         </div>
-        <button
-          class="menu-item"
-          onclick={() => { onExportDS(); open = false; }}
-        >
+        <button class="menu-item" onclick={() => { onExportDS(); open = false; }}>
           <FileDownloadIcon class="text-blue-600" />
           <span>Devscribe (.ds)</span>
         </button>
-        <button
-          class="menu-item"
-          onclick={() => { onExportClick(); open = false; }}
-        >
+        <button class="menu-item" onclick={() => { onExportClick(); open = false; }}>
           <ImageIcon class="text-purple-600" />
           <span>Export Diagram</span>
         </button>
-
-        <hr class="my-1 border-gray-100" />
-
-        <button
-          class="menu-item text-red-600 hover:bg-red-50"
-          onclick={() => { onClear(); open = false; }}
-        >
-          <DeleteIcon />
-          <span>Clear Canvas</span>
-        </button>
-
-        <hr class="my-1 border-gray-100" />
-
-        <div class="px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-          Canvas Background
-        </div>
-        <div class="px-4 py-2 flex gap-2">
-          {#each COLORS as color}
-            <button
-              title="Background: {color}"
-              style="width: 24px; height: 24px; border-radius: 50%; border: 1px solid #d1d5db; background-color: {color}; cursor: pointer;"
-              onclick={() => onBackgroundChange(color)}
-            ></button>
-          {/each}
-        </div>
       </div>
     </div>
   {/if}
