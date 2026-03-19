@@ -1,10 +1,13 @@
 <script lang="ts">
   import EditIcon from '~icons/material-symbols/edit';
   import HistoryIcon from '~icons/material-symbols/history';
+  import SaveIcon from '~icons/material-symbols/save';
   import ExcalidrawMenu from './ExcalidrawMenu.svelte';
   import ExportModal from './ExportModal.svelte';
   import dayjs from 'dayjs';
   import relativeTime from 'dayjs/plugin/relativeTime';
+  import { inputStateStore } from '$/util/state';
+  import { get } from 'svelte/store';
 
   dayjs.extend(relativeTime);
 
@@ -42,11 +45,76 @@
   };
 
   const handleSaveJSON = () => {
-    alert("Save JSON callback triggered!");
+    const state = get(inputStateStore);
+    const exportData = {
+      code: state.code,
+      mermaid: state.mermaid,
+    };
+    const finalJson = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([finalJson], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${fileName}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleExportDS = () => {
-    alert("Export .ds callback triggered!");
+    const state = get(inputStateStore);
+    const exportData = {
+      _id: fileData?._id || "",
+      version: 1,
+      time: Date.now(),
+      parent_file: fileId,
+      blocks: [
+        {
+          type: "mermaid",
+          data: { code: state.code, mermaid: state.mermaid },
+        },
+      ],
+      createdAt: fileData?.createdAt || Date.now(),
+      updatedAt: fileData?.updatedAt || Date.now(),
+      fileType: "mermaid-plugin",
+    };
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${fileName}.ds`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleSaveToDatabase = async () => {
+    const state = get(inputStateStore);
+    const updatedContents = {
+      version: "1.0",
+      time: Date.now(),
+      blocks: [
+        {
+          type: "mermaid",
+          data: { code: state.code, mermaid: state.mermaid },
+        },
+      ],
+      parent_file: fileId,
+      _id: fileData?._id,
+    };
+
+    if ((window as any).pluginAPI) {
+      try {
+        await (window as any).pluginAPI.updateDocument(fileId, [updatedContents]);
+        alert("Saved to database successfully!");
+      } catch (err) {
+        console.error("Save error:", err);
+        alert("Failed to save to database.");
+      }
+    } else {
+      alert("Database saving is only supported when running inside the desktop app.");
+    }
   };
 
   const handleClear = () => {
@@ -113,7 +181,7 @@
     <ExcalidrawMenu
       onExportClick={() => showExportModal = true}
       onLoad={handleLoad}
-      onSaveJSON={handleSaveJSON}
+      onSave={handleSaveToDatabase}
       onExportDS={handleExportDS}
       onClear={handleClear}
       onBackgroundChange={handleBackground}

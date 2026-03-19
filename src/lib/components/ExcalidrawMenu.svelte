@@ -12,7 +12,7 @@
   interface Props {
     onExportClick: () => void;
     onLoad: () => void;
-    onSaveJSON: () => void;
+    onSave: () => void;
     onExportDS: () => void;
     onClear: () => void;
     onBackgroundChange: (color: string) => void;
@@ -20,7 +20,7 @@
   }
 
   let { 
-    onExportClick, onLoad, onSaveJSON, onExportDS, onClear, onBackgroundChange, onShare 
+    onExportClick, onLoad, onSave, onExportDS, onClear, onBackgroundChange, onShare 
   }: Props = $props();
 
   let open = $state(false);
@@ -68,10 +68,10 @@
         </button>
         <button
           class="menu-item"
-          onclick={() => { onSaveJSON(); open = false; }}
+          onclick={() => { onSave(); open = false; }}
         >
           <SaveIcon class="text-green-600" />
-          <span>Save to...</span>
+          <span>Save</span>
         </button>
 
         <!-- Share Button -->
@@ -102,7 +102,7 @@
           onclick={() => { onExportClick(); open = false; }}
         >
           <ImageIcon class="text-purple-600" />
-          <span>Export Image</span>
+          <span>Export Diagram</span>
         </button>
 
         <hr class="my-1 border-gray-100" />
