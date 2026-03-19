@@ -21,7 +21,12 @@
   }
 
   let { 
-    fileId, fileName, lastEdited, excalidrawAPI, fileData, onRename 
+    fileId = '', 
+    fileName = 'Untitled', 
+    lastEdited = Date.now(), 
+    excalidrawAPI = undefined, 
+    fileData = undefined, 
+    onRename = () => {} 
   }: Props = $props();
 
   let showExportModal = $state(false);

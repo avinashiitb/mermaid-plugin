@@ -13,6 +13,14 @@
     <link rel="mask-icon" href="%sveltekit.assets%/favicon.svg" color="#000000" />
     <meta name="theme-color" content="#ff3670" />
     <link rel="manifest" href="%sveltekit.assets%/manifest.json" />
+    <script>
+      (function() {
+        const fullUrl = window.location.href;
+        if (fullUrl.includes('fileId=')) {
+          window.__extractedFileId = fullUrl.split('fileId=')[1].split('&')[0];
+        }
+      })();
+    </script>
     %sveltekit.head%
   </head>
   <body>

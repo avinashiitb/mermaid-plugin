@@ -13,7 +13,10 @@ const config = {
     adapter: adapter({
       pages: 'build',
       fallback: '404.html'
-    })
+    }),
+    serviceWorker: {
+      register: false
+    }
   }
 };
 

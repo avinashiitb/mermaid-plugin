@@ -22,7 +22,7 @@
   import { shouldShowEditorChooser } from '$/util/migration/domainMigration';
   import { PanZoomState } from '$/util/panZoom';
   import { inputStateStore, stateStore, updateCodeStore, urlsStore } from '$/util/state';
-import { get } from 'svelte/store';
+  import { get } from 'svelte/store';
   import { logEvent, logMermaidChartClick } from '$/util/stats';
   import { initHandler } from '$/util/util';
   import { onMount } from 'svelte';
@@ -62,16 +62,26 @@ import { get } from 'svelte/store';
 
   onMount(async () => {
     showEditorChooser = shouldShowEditorChooser();
-    
-    const urlParams = new URLSearchParams(window.location.search);
-    fileId = urlParams.get('fileId');
+
+    const fullUrl = window.location.href;
+    console.log('[DB LOAD] fullUrl inside Svelte:', fullUrl);
+    let id = (window as any).__extractedFileId || null;
+
+    if (!id && fullUrl.includes('fileId=')) {
+      id = fullUrl.split('fileId=')[1].split('&')[0];
+    }
+
+    fileId = id;
+    console.log('[DB LOAD] extracted fileId:', fileId);
+    console.log('[DB LOAD] pluginAPI present:', !!(window as any).pluginAPI);
 
     if (fileId && (window as any).pluginAPI) {
       try {
         const pluginAPI = (window as any).pluginAPI;
         const fileDetails = await pluginAPI.getFileDetailsById(fileId);
+        console.log('[DB LOAD] fileDetails:', fileDetails);
         if (fileDetails) {
-          diagName = fileDetails.title || 'Untitled Diagram';
+          diagName = fileDetails.title || 'Untitled';
           lastEdited = fileDetails.lastEdited || Date.now();
         }
 
@@ -115,16 +125,16 @@ import { get } from 'svelte/store';
         const existingDoc = documents && documents.length > 0 ? documents[0] : null;
 
         const updatedContents = {
-          version: "2.28.2",
+          version: '2.28.2',
           time: Date.now(),
-          blocks: [{ type: "mermaid", data: state }],
+          blocks: [{ type: 'mermaid', data: state }],
           parent_file: fileId,
           _id: existingDoc?._id
         };
 
         await pluginAPI.updateDocument(fileId, [updatedContents]);
       } catch (error) {
-        console.error("Auto-save error:", error);
+        console.error('Auto-save error:', error);
       } finally {
         isSaving = false;
       }
@@ -155,10 +165,10 @@ import { get } from 'svelte/store';
     </div>
   {/snippet}
 
-  <TopBar 
-    fileId={fileId || "local-diag"}
+  <TopBar
+    fileId={fileId || 'local-diag'}
     fileName={diagName}
-    lastEdited={lastEdited}
+    {lastEdited}
     onRename={async (newName) => {
       diagName = newName;
       lastEdited = Date.now();
@@ -167,11 +177,10 @@ import { get } from 'svelte/store';
         try {
           await pluginAPI.updateFileName(fileId, newName);
         } catch (e) {
-          console.error("Failed to rename on DB:", e);
+          console.error('Failed to rename on DB:', e);
         }
       }
-    }}
-  />
+    }} />
 
   <div class="flex flex-1 flex-col overflow-hidden" bind:clientWidth={width}>
     <div
