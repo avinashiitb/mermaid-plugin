@@ -62,6 +62,11 @@
   let isMobile = $derived(width < 640);
   let isViewMode = $state(true);
   let showEditorChooser = $state(false);
+  let fileId = $state<string | null>(null);
+  let isHistoryOpen = $state(false);
+  let diagName = $state('Untitled Diagram');
+  let lastEdited = $state(Date.now());
+  let isSaving = false;
 
   let fileId = $state<string | null>(null);
   let diagName = $state('Untitled Diagram');
