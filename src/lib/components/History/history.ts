@@ -1,5 +1,6 @@
 import type { HistoryEntry, HistoryType, Optional } from '$lib/types';
 import { localStorage, persist } from '$lib/util/persist';
+import { getStorageKey } from '$lib/util/devscribe';
 import { logEvent } from '$lib/util/stats';
 import { generateSlug } from 'random-word-slugs';
 import type { Readable, Writable } from 'svelte/store';
@@ -17,13 +18,13 @@ export const historyModeStore: Writable<HistoryType> = persist(
 const autoHistoryStore: Writable<HistoryEntry[]> = persist(
   writable([]),
   localStorage(),
-  'autoHistoryStore'
+  getStorageKey('autoHistoryStore')
 );
 
 const manualHistoryStore: Writable<HistoryEntry[]> = persist(
   writable([]),
   localStorage(),
-  'manualHistoryStore'
+  getStorageKey('manualHistoryStore')
 );
 
 export const loaderHistoryStore: Writable<HistoryEntry[]> = writable([]);

@@ -21,11 +21,19 @@
   import type { EditorMode, Tab } from '$/types';
   import { shouldShowEditorChooser } from '$/util/migration/domainMigration';
   import { PanZoomState } from '$/util/panZoom';
-  import { inputStateStore, stateStore, updateCodeStore, urlsStore } from '$/util/state';
-import { get } from 'svelte/store';
+  import { stateStore, updateCodeStore, urlsStore, applyLoadedState, inputStateStore } from '$/util/state';
+  import {
+    getFileId,
+    isDevScribe,
+    loadDevScribeFile,
+    saveDevScribeFile,
+    renameDevScribeFile,
+    type BreadcrumbItem
+  } from '$/util/devscribe';
+  import { get } from 'svelte/store';
   import { logEvent, logMermaidChartClick } from '$/util/stats';
   import { initHandler } from '$/util/util';
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import CodeIcon from '~icons/custom/code';
   import HistoryIcon from '~icons/material-symbols/history';
   import GearIcon from '~icons/material-symbols/settings-outline-rounded';
@@ -60,79 +68,109 @@ import { get } from 'svelte/store';
   let lastEdited = $state(Date.now());
   let isSaving = false;
 
+  let fileId = $state<string | null>(null);
+  let diagName = $state('Untitled Diagram');
+  let lastEdited = $state(Date.now());
+  let breadcrumbs = $state<BreadcrumbItem[]>([]);
+  let existingDoc = $state<any | null>(null);
+  let isDevScribeEnv = $state(false);
+  let isSaving = $state(false);
+  let saveStatus = $state<'saved' | 'saving' | 'error'>('saved');
+  let isContentLoading = $state(true);
+
+  let saveTimeout: ReturnType<typeof setTimeout> | undefined;
+
+  const scheduleAutoSave = (currentState: any) => {
+    if (!fileId || !isDevScribeEnv || isContentLoading) return;
+    clearTimeout(saveTimeout);
+    saveStatus = 'saving';
+    saveTimeout = setTimeout(async () => {
+      if (isSaving) return;
+      isSaving = true;
+      try {
+        await saveDevScribeFile(fileId!, currentState, existingDoc);
+        lastEdited = Date.now();
+        saveStatus = 'saved';
+      } catch (err) {
+        console.error('[Mermaid] Auto-save error:', err);
+        saveStatus = 'error';
+      } finally {
+        isSaving = false;
+      }
+    }, 1500);
+  };
+
   onMount(async () => {
     showEditorChooser = shouldShowEditorChooser();
-    
-    const urlParams = new URLSearchParams(window.location.search);
-    fileId = urlParams.get('fileId');
 
-    if (fileId && (window as any).pluginAPI) {
+    // Resolve DevScribe fileId
+    const currentFileId = getFileId();
+    fileId = currentFileId;
+    isDevScribeEnv = isDevScribe();
+
+    if (currentFileId && isDevScribeEnv) {
       try {
-        const pluginAPI = (window as any).pluginAPI;
-        const fileDetails = await pluginAPI.getFileDetailsById(fileId);
-        if (fileDetails) {
-          diagName = fileDetails.title || 'Untitled Diagram';
-          lastEdited = fileDetails.lastEdited || Date.now();
+        isContentLoading = true;
+        const data = await loadDevScribeFile(currentFileId);
+        if (data.details) {
+          diagName = data.details.title || 'Untitled Diagram';
+          lastEdited = data.details.lastEdited || Date.now();
         }
-
-        const documents = await pluginAPI.getDocumentsByParentFile(fileId);
-        if (documents && documents.length > 0) {
-          const content = documents[0];
-          const rawData = content.blocks?.[0]?.data;
-          if (rawData) {
-            if (rawData.code) {
-              inputStateStore.set(rawData);
-            } else if (typeof rawData === 'string') {
-              updateCodeStore({ code: rawData });
-            }
-          }
+        if (data.breadcrumbs) {
+          breadcrumbs = data.breadcrumbs;
+        }
+        if (data.document) {
+          existingDoc = data.document;
+        }
+        if (data.diagramState) {
+          applyLoadedState(data.diagramState);
         }
       } catch (err) {
-        console.error('Failed to load document from DB:', err);
+        console.error('[Mermaid] Error loading DevScribe file:', err);
+      } finally {
+        isContentLoading = false;
       }
     } else {
-      await initHandler();
+      isContentLoading = false;
     }
+
+    await initHandler();
 
     window.addEventListener('appinstalled', () => {
       logEvent('pwaInstalled', { isMobile });
     });
-  });
 
-  $effect(() => {
-    if (!fileId || !(window as any).pluginAPI) return;
+    // Auto-save on diagram changes
+    const unsubscribeStore = inputStateStore.subscribe((state) => {
+      if (!isContentLoading) {
+        scheduleAutoSave(state);
+      }
+    });
 
-    const autoSaveToDatabase = async () => {
-      const pluginAPI = (window as any).pluginAPI;
-      if (isSaving) return;
-      isSaving = true;
-
-      try {
+    const handleBeforeUnload = () => {
+      if (fileId && isDevScribeEnv) {
         const state = get(inputStateStore);
-        if (!state.code) return;
-
-        const documents = await pluginAPI.getDocumentsByParentFile(fileId);
-        const existingDoc = documents && documents.length > 0 ? documents[0] : null;
-
-        const updatedContents = {
-          version: "2.28.2",
-          time: Date.now(),
-          blocks: [{ type: "mermaid", data: state }],
-          parent_file: fileId,
-          _id: existingDoc?._id
-        };
-
-        await pluginAPI.updateDocument(fileId, [updatedContents]);
-      } catch (error) {
-        console.error("Auto-save error:", error);
-      } finally {
-        isSaving = false;
+        void saveDevScribeFile(fileId, state, existingDoc);
       }
     };
+    window.addEventListener('beforeunload', handleBeforeUnload);
 
-    const intervalId = setInterval(autoSaveToDatabase, 5000);
-    return () => clearInterval(intervalId);
+    return () => {
+      clearTimeout(saveTimeout);
+      unsubscribeStore();
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
   });
+
+  const handleRename = async (newName: string) => {
+    diagName = newName;
+    lastEdited = Date.now();
+    if (fileId && isDevScribeEnv) {
+      await renameDevScribeFile(fileId, newName);
+    }
+  };
+
+  let isHistoryOpen = $state(false);
 
   let editorPane: Resizable.Pane | undefined;
   $effect(() => {
@@ -159,18 +197,10 @@ import { get } from 'svelte/store';
     fileId={fileId || "local-diag"}
     fileName={diagName}
     lastEdited={lastEdited}
-    onRename={async (newName) => {
-      diagName = newName;
-      lastEdited = Date.now();
-      const pluginAPI = (window as any).pluginAPI;
-      if (fileId && pluginAPI) {
-        try {
-          await pluginAPI.updateFileName(fileId, newName);
-        } catch (e) {
-          console.error("Failed to rename on DB:", e);
-        }
-      }
-    }}
+    breadcrumbs={breadcrumbs}
+    saveStatus={saveStatus}
+    fileData={existingDoc}
+    onRename={handleRename}
   />
 
   <div class="flex flex-1 flex-col overflow-hidden" bind:clientWidth={width}>

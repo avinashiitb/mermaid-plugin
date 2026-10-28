@@ -12,6 +12,7 @@ import { parse } from './mermaid';
 import { localStorage, persist } from './persist';
 import { deserializeState, pakoSerde, serializeState } from './serde';
 import { errorDebug, formatJSON, getUTMSource, MCBaseURL } from './util';
+import { getFileId, isDevScribe, getStorageKey } from './devscribe';
 
 export const defaultState: State = {
   code: `flowchart TD
@@ -42,7 +43,8 @@ const urlParseFailedState = `flowchart TD
     click D href "https://github.com/mermaid-js/mermaid-live-editor/issues/new?assignees=&labels=bug&template=bug_report.md&title=Broken%20link" "Raise issue"`;
 
 // inputStateStore handles all updates and is shared externally when exporting via URL, History, etc.
-export const inputStateStore = persist(writable(defaultState), localStorage(), 'codeStore');
+export { getStorageKey };
+export const inputStateStore = persist(writable(defaultState), localStorage(), getStorageKey('codeStore'));
 
 export const currentState: ValidatedState = (() => {
   const state = get(inputStateStore);
@@ -161,6 +163,11 @@ export const urlsStore = derived([stateStore], ([{ code, serialized }]) => {
 });
 
 export const loadState = (data: string): void => {
+  // If running in DevScribe or data is a route/query string, do not treat it as serialized diagram state
+  if (!data || data.startsWith('/') || data.startsWith('?') || data.includes('fileId=')) {
+    return;
+  }
+
   let state: State;
   console.log(`Loading '${data}'`);
   try {
@@ -234,12 +241,32 @@ export const toggleDarkTheme = (dark: boolean): void => {
 };
 
 export const initURLSubscription = (): void => {
+  // In DevScribe, the URL hash contains the route and fileId (e.g., #/?fileId=...).
+  // Overwriting window.location.hash with base64 data breaks DevScribe navigation and tab switching.
+  if (isDevScribe() || getFileId()) {
+    return;
+  }
+
   const updateHash = debounce((hash) => {
     history.replaceState(undefined, '', `#${hash}`);
   }, 250);
 
   stateStore.subscribe(({ serialized }) => {
     updateHash(serialized);
+  });
+};
+
+export const applyLoadedState = (loadedState: Partial<State>): void => {
+  inputStateStore.update((state) => {
+    renderCount++;
+    return {
+      ...state,
+      ...loadedState,
+      code: loadedState.code ?? state.code ?? defaultState.code,
+      mermaid: loadedState.mermaid ?? state.mermaid ?? defaultState.mermaid,
+      renderCount,
+      updateDiagram: true
+    };
   });
 };
 

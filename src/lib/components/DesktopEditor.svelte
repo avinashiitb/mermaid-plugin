@@ -121,6 +121,17 @@
     aiPromptManager.setEditor(editor);
     decorationsCollection = editor.createDecorationsCollection([]);
 
+    const handleUndo = () => {
+      editor?.focus();
+      editor?.trigger('source', 'undo', null);
+    };
+    const handleRedo = () => {
+      editor?.focus();
+      editor?.trigger('source', 'redo', null);
+    };
+    window.addEventListener('mermaid-undo', handleUndo);
+    window.addEventListener('mermaid-redo', handleRedo);
+
     editor.onMouseDown((e) => {
       const isGutter = e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN;
       if (isGutter && e.target.position?.lineNumber === lastMouseLine && lastMouseLine > 0) {
@@ -203,6 +214,8 @@
     renderAIPromptGutterGlyphIcon();
 
     return () => {
+      window.removeEventListener('mermaid-undo', handleUndo);
+      window.removeEventListener('mermaid-redo', handleRedo);
       unsubscribeState();
       unsubscribeMode();
       resizeObserver.disconnect();
